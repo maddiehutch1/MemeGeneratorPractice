@@ -32,9 +32,10 @@ Create a working demo that shows:
 - **Tech:** Node.js + Express
 - **Responsibilities:**
   - Receive uploaded image
-  - Call OpenAI Vision API
+  - Call OpenAI Vision API (gpt-4o)
   - Return generated captions
   - Handle errors
+- **Note:** Text overlay rendering handled on frontend (Canvas). Sharp library referenced for optional future backend rendering only.
 
 ### Data Flow
 ```
@@ -77,7 +78,7 @@ Canvas exports as PNG
 ### 2. Caption Generation with Configurable Context
 **Implementation:**
 - Send image + optional context to backend via multipart/form-data
-- Backend calls OpenAI GPT-4 Vision API
+- Backend calls OpenAI gpt-4o Vision API
 - User can provide context in three ways:
 
 **Context Options:**
@@ -244,8 +245,9 @@ Canvas exports as PNG
 ### Backend
 - **Framework:** Express.js
 - **Image handling:** Multer (for file uploads)
-- **OpenAI SDK:** `openai` npm package
+- **OpenAI SDK:** `openai` npm package (gpt-4o model)
 - **CORS:** Enable for local development
+- **Note:** Sharp library docs included for reference but NOT required for MVP (Canvas handles rendering)
 
 ### Deployment (MVP)
 - **Frontend:** Run locally (`npm run dev`)
@@ -465,7 +467,7 @@ Return ONLY a JSON array with this structure:
 ```
 
 ### API Configuration
-- **Model:** `gpt-4-vision-preview` (or latest vision model)
+- **Model:** `gpt-4o` (current vision-capable model, replaces deprecated gpt-4-vision-preview)
 - **Max tokens:** 300 (enough for captions)
 - **Temperature:** 0.8 (creative but not random)
 

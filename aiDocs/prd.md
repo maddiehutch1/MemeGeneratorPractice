@@ -113,7 +113,7 @@ From our market research:
 - Avoid offensive content (OpenAI safety guidelines)
 
 **Technical Notes:**
-- Use GPT-4 Vision API
+- Use GPT-4o Vision API (replaces deprecated gpt-4-vision-preview)
 - Prompt engineering to ensure:
   - Classic top/bottom format
   - Variety in comedic style across options
@@ -208,7 +208,7 @@ From our market research:
 ### Tech Stack
 - **Frontend:** React (Vite)
 - **Backend:** Node.js + Express
-- **AI:** OpenAI GPT-4 Vision API
+- **AI:** OpenAI gpt-4o (vision-capable model)
 - **Image Processing:** HTML Canvas (client-side rendering)
 - **Hosting:** TBD (Vercel/Netlify for frontend, separate backend deploy)
 
@@ -236,7 +236,7 @@ Client                    Backend                   OpenAI
 ```
 
 ### Cost Considerations
-- GPT-4 Vision: ~$0.01-0.03 per image analysis + caption generation
+- gpt-4o Vision: ~$0.01-0.03 per image analysis + caption generation
 - Rate limiting: 10 generations per image
 - No free tier in V1 (build monetization in V2)
 
