@@ -7,10 +7,9 @@
 
 ## Tech Stack
 - **Frontend:** React + Vite
-- **Backend:** Node.js + Express
-- **AI:** OpenAI GPT-4 Vision API
-- **Image Processing:** HTML Canvas (client-side)
-- **Deployment:** Local/staging (TBD for production)
+- **Backend:** Node.js + Express  
+- **AI:** OpenAI GPT-4o (Chat Completions API)
+- **Image Processing:** HTML Canvas (client-side text overlay)
 
 ## Core Value Proposition
 Upload any photo → AI generates contextually funny captions → Iterate with configurable context → Download meme
@@ -22,19 +21,6 @@ Upload any photo → AI generates contextually funny captions → Iterate with c
 - [ ] Prompt engineering for caption quality
 - [ ] Canvas text rendering implementation
 - [ ] User flow: Upload → Context → Generate → Preview → Download
-
-## Architecture Overview
-```
-Frontend (React)          Backend (Node.js)         OpenAI API
-     |                          |                         |
-  Upload image ----------> Receive + forward -------> Vision analysis
-     |                          |                         |
-  Context input --------> Include in prompt --------> Caption generation
-     |                          |                         |
-  Render preview <-------- Return captions <--------- JSON response
-     |
-  Download PNG
-```
 
 ## Scope Decisions (MVP)
 - ✅ Classic top/bottom text format only
@@ -49,6 +35,9 @@ Frontend (React)          Backend (Node.js)         OpenAI API
 - Caption quality (first-pick rate)
 - Iteration usage (context refinement)
 - Completion rate (upload → download)
+
+## Documentation
+- **Architecture:** See `aiDocs/architecture.md` for system design details
 
 ---
 
