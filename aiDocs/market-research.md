@@ -260,7 +260,7 @@ Observed across AI creator tools:
 
 ### 4.1 OpenAI Vision in Consumer Apps
 
-**Be My Eyes + GPT-4 Vision**
+**Be My Eyes + gpt-4o Vision**
 
 * Demonstrates consumer-grade image understanding
 * Source:
