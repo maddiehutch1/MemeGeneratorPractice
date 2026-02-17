@@ -3,13 +3,12 @@
 ## Quick Reference
 - **PRD:** `aiDocs/prd.md`
 - **MVP Scope:** `aiDocs/mvp.md`
-- **Market Research:** `aiDocs/market-research.md` (moved from ai/guides/)
+- **Market Research:** `aiDocs/market-research.md`
+- **Architecture:** `aiDocs/architecture.md`
 
-## Tech Stack
-- **Frontend:** React + Vite
-- **Backend:** Node.js + Express  
-- **AI:** OpenAI GPT-4o (Chat Completions API)
-- **Image Processing:** HTML Canvas (client-side text overlay)
+## Behavior
+Whenever creating plan docs and roadmap docs, always save them in ai/roadmaps. Prefix the name with the date. Add a note that we need to avoid over-engineering, cruft, and legacy-compatibility features in this clean code project. Make sure they reference each other.
+- Whenever finishing with implementing a plan / roadmap doc pair, make sure the roadmap is up to date (tasks checked off, etc). Then move the docs to ai/roadmaps/complete. Then update `ai/changelog.md` accordingly.
 
 ## Core Value Proposition
 Upload any photo → AI generates contextually funny captions → Iterate with configurable context → Download meme
@@ -38,7 +37,10 @@ Upload any photo → AI generates contextually funny captions → Iterate with c
 
 ## Documentation
 - **Architecture:** See `aiDocs/architecture.md` for system design details
-
+- **Changelog:** See `ai/changelog.md` for changelog with brief notes about each change to the codebase
+- **PRD:** See `aiDocs/prd.md` for full product requirements
+- **MVP Spec:** See `aiDocs/mvp.md` for demo scope and implementation plan
+- **Market Research:** See `aiDocs/market-research.md` for competitive analysis and market validation
 ---
 
 **Last Updated:** 2026-02-16

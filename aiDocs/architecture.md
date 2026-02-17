@@ -1,8 +1,9 @@
 # System Architecture: AI-Powered Meme Generator
 
-**Version:** 1.0  
+**Version:** 1.1  
 **Last Updated:** 2026-02-16  
-**Status:** Design Phase
+**Status:** Implementation Ready  
+**Implementation Plan:** `ai/roadmaps/2026-02-16-implementation-roadmap.md`
 
 ---
 
@@ -41,8 +42,9 @@ A web-based meme generator that uses OpenAI's vision API to analyze uploaded ima
 ### Data Storage (MVP)
 - **In-memory only** - no database
 - Frontend: React state
-- Backend: Request-scoped variables
+- Backend: Request-scoped variables (with generation tracking map)
 - Uploaded images cleared after generation
+- **10-generation limit** per image enforced server-side
 
 ---
 
@@ -140,11 +142,11 @@ App
 ```
 /api
 ├── /generate-caption (POST)
-│   ├── Accepts: multipart/form-data or JSON with base64
-│   ├── Returns: JSON with caption(s)
-│   └── Error handling
+│   ├── Accepts: JSON with base64 image + context
+│   ├── Returns: JSON with 3 captions + metadata
+│   └── Error handling with retry logic
 │
-└── /health (GET) - optional health check
+└── /health (GET) - health check endpoint
 ```
 
 ---
@@ -152,81 +154,50 @@ App
 ## Data Flow
 
 ### 1. Image Upload Flow
-
-```javascript
-// Frontend
-User selects image
-  → File validated (type, size)
-  → Convert to base64 (or keep as File)
-  → Store in React state
-  → Show preview thumbnail
-  → Enable context controls + generate button
-```
+1. User selects image via drag-and-drop or file input
+2. Client validates type (JPG/PNG) and size (max 10MB)
+3. Convert to base64 using FileReader API
+4. Store in React state
+5. Show preview thumbnail
+6. Enable context controls and generate button
 
 ### 2. Caption Generation Flow
-
-```javascript
-// Frontend → Backend
-User clicks "Generate Meme"
-  → Collect: image (base64), context (preset/custom/none)
-  → POST to /api/generate-caption
-  → Show loading spinner
-
-// Backend → OpenAI
-Receive request
-  → Validate image format/size
-  → Build system prompt based on context type
-  → Call OpenAI Chat Completions API
-    • Model: gpt-4o
-    • Messages: [system prompt, user message with image]
-    • Response format: { type: "json_object" }
-    • Temperature: 0.8
-    • Max tokens: 300-500
-  → Parse JSON response
-  → Return to frontend
-
-// Frontend displays
-Receive caption(s)
-  → Update state with options
-  → Render caption cards (if multiple)
-  → Auto-apply first option to preview
-  → Enable download button
-```
+1. User optionally selects context (preset or custom)
+2. User clicks "Generate Meme"
+3. Frontend sends POST to `/api/generate-caption` with image + context
+4. Backend validates request
+5. Backend builds system prompt based on context type
+6. Backend calls OpenAI Chat Completions API (gpt-4o)
+   - High detail image analysis
+   - JSON response format
+   - Temperature: 0.8, Max tokens: 500
+7. Backend parses JSON, validates structure
+8. Backend returns 3 caption options with metadata
+9. Frontend displays options as selectable cards
+10. First option auto-applied to preview
+11. Download button enabled
 
 ### 3. Text Overlay Rendering Flow
-
-```javascript
-// Frontend (Canvas)
-User selects caption
-  → Get canvas context
-  → Load uploaded image into canvas
-  → Calculate dimensions:
-    • Font size = image width * 0.05
-    • Top text position = height * 0.10
-    • Bottom text position = height * 0.90
-  → Draw image to canvas
-  → Set text properties:
-    • Font: "Impact, Arial Black"
-    • Fill: white
-    • Stroke: black (width = font size * 0.05)
-    • Text transform: uppercase
-    • Alignment: center
-  → Draw top text (with word wrap if needed)
-  → Draw bottom text (with word wrap if needed)
-  → Update preview
-```
+1. User selects caption from options
+2. Get 2D canvas context
+3. Load uploaded image into canvas
+4. Calculate responsive dimensions:
+   - Font size = image width × 0.05
+   - Top text position = height × 0.05
+   - Bottom text position = height × 0.90
+5. Draw image to canvas
+6. Configure text properties (Impact font, white fill, black stroke)
+7. Apply word wrapping (max 90% width, 2 lines max)
+8. Draw top and bottom text with stroke + fill
+9. Update preview
 
 ### 4. Download Flow
-
-```javascript
-// Frontend
-User clicks "Download Meme"
-  → Get canvas element
-  → Convert to Blob: canvas.toBlob(blob => {...})
-  → Create download link
-  → Trigger download: filename = `meme-${Date.now()}.png`
-  → Clear temp state (optional)
-```
+1. User clicks "Download Meme"
+2. Convert canvas to Blob using `canvas.toBlob()`
+3. Create temporary download link
+4. Set filename: `meme-{timestamp}.png`
+5. Trigger download
+6. Cleanup temporary URL
 
 ---
 
@@ -234,61 +205,38 @@ User clicks "Download Meme"
 
 ### POST /api/generate-caption
 
-**Request:**
-```json
-{
-  "image": "data:image/jpeg;base64,/9j/4AAQSkZJRg...",
-  "context": {
-    "type": "preset",  // "none" | "preset" | "custom"
-    "preset": "sarcastic",  // if type = "preset"
-    "customPrompt": "make it about Monday mornings"  // if type = "custom"
-  }
-}
-```
+**Request Format:**
+- Method: POST
+- Content-Type: application/json
+- Body fields:
+  - `image`: Base64-encoded image with data URL prefix (e.g., "data:image/jpeg;base64,...")
+  - `context.type`: "none", "preset", or "custom"
+  - `context.preset`: (if type=preset) "sarcastic", "wholesome", "absurd", or "roast"
+  - `context.customPrompt`: (if type=custom) User's custom text
 
-**Response (Single Caption):**
-```json
-{
-  "success": true,
-  "caption": {
-    "topText": "WHEN YOU FIND THE PERFECT PARKING SPOT",
-    "bottomText": "AT THE GROCERY STORE"
-  }
-}
-```
+**Supported Presets:**
+- `sarcastic` - Dry, ironic humor
+- `wholesome` - Warm, positive vibes
+- `absurd` - Chaotic, surreal internet humor
+- `roast` - Mean but funny, no mercy
 
-**Response (Multiple Captions):**
-```json
-{
-  "success": true,
-  "captions": [
-    {
-      "id": 1,
-      "topText": "WHEN YOU FIND THE PERFECT PARKING SPOT",
-      "bottomText": "AT THE GROCERY STORE"
-    },
-    {
-      "id": 2,
-      "topText": "POV: YOU'RE ABOUT TO MAKE BAD DECISIONS",
-      "bottomText": "BUT IT'S GOING TO BE WORTH IT"
-    },
-    {
-      "id": 3,
-      "topText": "NOBODY:",
-      "bottomText": "ABSOLUTELY NOBODY: THIS GUY"
-    }
-  ]
-}
-```
+**Success Response Fields:**
+- `success`: Boolean (true)
+- `captions`: Array of 3 objects, each with `id`, `topText`, `bottomText`
+- `tokensUsed`: Number of tokens consumed
+- `cost`: Estimated cost in USD
 
-**Error Response:**
-```json
-{
-  "success": false,
-  "error": "Invalid image format",
-  "message": "Supported formats: JPG, PNG, WebP"
-}
-```
+**Error Response Fields:**
+- `success`: Boolean (false)
+- `error`: Error code string
+- `message`: User-friendly error message
+
+**Error Types:**
+- `invalid_image` - Unsupported format or corrupted file
+- `file_too_large` - Image exceeds 10MB
+- `rate_limit_exceeded` - Hit 10-generation limit per image
+- `openai_error` - OpenAI API failure
+- `server_error` - Internal server error
 
 ---
 
@@ -297,69 +245,36 @@ User clicks "Download Meme"
 ### Prompt Engineering
 
 **Base System Prompt (No Context):**
-```
-You are a funny meme caption generator. Analyze this image and create ONE meme caption in classic top-text/bottom-text format.
-
-Requirements:
-- Top text should set up the joke (context)
-- Bottom text should be the punchline
-- Use ALL CAPS
-- Keep it short (5-15 words per line)
-- Be funny and internet-native (not corporate)
-- Match the content/context of the image
-
-Return ONLY a JSON object:
-{
-  "topText": "YOUR TOP TEXT HERE",
-  "bottomText": "YOUR BOTTOM TEXT HERE"
-}
-```
+- Role: Funny meme caption generator
+- Task: Create 3 different captions in top/bottom format
+- Requirements: Different comedic angles, ALL CAPS, 5-15 words per line, internet-native humor
+- Output: JSON array with topText/bottomText objects
 
 **With Preset Style:**
-```
-[Base prompt]
-
-Style: SARCASTIC
-Tone description: Dry, ironic, "oh great, just what I needed" energy
-IMPORTANT: Use this tone/style for the humor.
-```
+- Append style description to base prompt
+- Example: "Style: SARCASTIC. Dry, ironic, 'oh great, just what I needed' energy."
 
 **With Custom Prompt:**
-```
-[Base prompt]
+- Append user's creative direction to base prompt
+- Example: "User's creative direction: 'make it about Monday mornings'"
 
-User's creative direction: "make it about Monday mornings"
-IMPORTANT: Incorporate the user's creative direction into the caption.
-```
+**Preset Style Descriptions:**
+- **Sarcastic:** "Style: SARCASTIC. Dry, ironic, 'oh great, just what I needed' energy."
+- **Wholesome:** "Style: WHOLESOME. Warm, positive, 'faith in humanity restored' vibes."
+- **Absurd:** "Style: ABSURD. Random, nonsensical, chaotic, weird internet humor."
+- **Roast:** "Style: ROAST. Mean but funny, call-out culture, no mercy."
 
 ### API Configuration
 
-```javascript
-const response = await openai.chat.completions.create({
-  model: "gpt-4o",
-  messages: [
-    {
-      role: "system",
-      content: systemPrompt
-    },
-    {
-      role: "user",
-      content: [
-        {
-          type: "image_url",
-          image_url: {
-            url: `data:image/jpeg;base64,${base64Image}`,
-            detail: "high"  // or "low" for cost optimization
-          }
-        }
-      ]
-    }
-  ],
-  response_format: { type: "json_object" },
-  max_tokens: 300,  // single caption
-  temperature: 0.8  // balanced creativity
-});
-```
+**Model:** gpt-4o  
+**Messages:**
+- System message with dynamic prompt (varies by context)
+- User message with base64 image (detail: "high")
+
+**Parameters:**
+- `response_format`: { type: "json_object" }
+- `max_tokens`: 500 (for 3 captions)
+- `temperature`: 0.8 (balanced creativity)
 
 ### Cost Estimation
 
@@ -369,8 +284,9 @@ const response = await openai.chat.completions.create({
 - Response: ~50 tokens
 - **Total:** ~965 tokens per generation
 
-**Pricing (as of 2026-02-16):**
-- gpt-4o: $2.50/1M input tokens, $10.00/1M output tokens
+**Pricing (gpt-4o):**
+- Input: $2.50/1M tokens
+- Output: $10.00/1M tokens
 - **Cost per generation:** ~$0.003 (0.3 cents)
 - **With 10 regenerations:** ~$0.03 per image
 
@@ -378,132 +294,75 @@ const response = await openai.chat.completions.create({
 
 ## Canvas Text Rendering Implementation
 
-### Algorithm
+### Algorithm Overview
 
-```javascript
-function renderMemeText(canvas, image, topText, bottomText) {
-  const ctx = canvas.getContext('2d');
-  
-  // Set canvas size to match image
-  canvas.width = image.width;
-  canvas.height = image.height;
-  
-  // Draw base image
-  ctx.drawImage(image, 0, 0);
-  
-  // Calculate responsive font size (5% of width)
-  const fontSize = Math.floor(image.width * 0.05);
-  
-  // Configure text style
-  ctx.font = `bold ${fontSize}px Impact, Arial Black, sans-serif`;
-  ctx.fillStyle = 'white';
-  ctx.strokeStyle = 'black';
-  ctx.lineWidth = fontSize * 0.05;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'top';
-  
-  // Convert to uppercase
-  const topUpper = topText.toUpperCase();
-  const bottomUpper = bottomText.toUpperCase();
-  
-  // Word wrap helper
-  const wrapText = (text, maxWidth) => {
-    const words = text.split(' ');
-    const lines = [];
-    let currentLine = words[0];
-    
-    for (let i = 1; i < words.length; i++) {
-      const testLine = currentLine + ' ' + words[i];
-      const metrics = ctx.measureText(testLine);
-      
-      if (metrics.width > maxWidth) {
-        lines.push(currentLine);
-        currentLine = words[i];
-      } else {
-        currentLine = testLine;
-      }
-    }
-    lines.push(currentLine);
-    return lines;
-  };
-  
-  // Wrap text (max 90% of canvas width)
-  const maxWidth = image.width * 0.9;
-  const topLines = wrapText(topUpper, maxWidth);
-  const bottomLines = wrapText(bottomUpper, maxWidth);
-  
-  // Draw top text
-  const topY = image.height * 0.05;
-  topLines.forEach((line, i) => {
-    const y = topY + (i * fontSize * 1.2);
-    ctx.strokeText(line, image.width / 2, y);
-    ctx.fillText(line, image.width / 2, y);
-  });
-  
-  // Draw bottom text
-  const bottomY = image.height * 0.90 - (bottomLines.length * fontSize * 1.2);
-  bottomLines.forEach((line, i) => {
-    const y = bottomY + (i * fontSize * 1.2);
-    ctx.strokeText(line, image.width / 2, y);
-    ctx.fillText(line, image.width / 2, y);
-  });
-}
-```
+1. Set canvas dimensions to match image
+2. Draw base image to canvas
+3. Calculate responsive font size (5% of image width)
+4. Configure text style (Impact font, white fill, black stroke)
+5. Word wrap text to max 90% canvas width (2 lines max)
+6. Draw top text at 5% from top
+7. Draw bottom text at 90% from top
+8. Apply stroke then fill for outlined effect
+
+### Text Properties
+
+**Font:** Impact, Arial Black (fallback), sans-serif  
+**Size:** Dynamic (5% of image width)  
+**Fill:** White  
+**Stroke:** Black (width = 5% of font size)  
+**Alignment:** Center  
+**Transform:** Uppercase  
+**Max Width:** 90% of canvas width  
+**Line Spacing:** 1.2× font size  
+
+### Word Wrapping Strategy
+
+- Split text by words
+- Measure each word with canvas context
+- Break to new line when exceeding max width
+- Maximum 2 lines per text block
+- If text exceeds 2 lines, truncate with ellipsis
 
 ---
 
 ## Error Handling Strategy
 
-### Frontend
-
-```javascript
-// Upload validation
-- File type check (jpg, png, webp, gif)
+### Frontend Errors
+- File type check (JPG, PNG only)
 - File size limit (10MB)
-- Image dimensions check (optional)
-
-// API call errors
+- Image load validation
 - Network timeout (30s)
 - 4xx/5xx responses
 - Invalid JSON response
-- Show user-friendly error messages
-```
+- User-friendly error messages
 
-### Backend
-
-```javascript
-// Request validation
+### Backend Errors
 - Image format validation
 - Base64 decode errors
 - Missing required fields
-
-// OpenAI API errors
-- Rate limit (429) → retry with exponential backoff
-- Invalid API key (401) → log and return 500
-- Timeout → return 504
-- Invalid response → retry once, then fail gracefully
-
-// Response handling
-- Validate JSON structure
-- Sanitize output (escape HTML if needed)
-- Log errors for debugging
-```
+- OpenAI API errors (rate limit, timeout, invalid response)
+  - Retry with exponential backoff (1 attempt)
+  - Log and return appropriate status codes
+- JSON structure validation
+- Input sanitization
 
 ---
 
 ## Performance Considerations
 
 ### Frontend Optimization
-- Lazy load Canvas API
-- Debounce text preview updates
-- Use `requestAnimationFrame` for smooth rendering
-- Compress images client-side if > 5MB
+- Canvas rendering cached for selected caption
+- Use `requestAnimationFrame` for smooth preview updates
+- Client-side image compression if > 5MB
+- Lazy loading for components (Phase 3)
 
 ### Backend Optimization
-- Stream image uploads (don't buffer entire file in memory)
-- Implement request timeout (30s)
-- Add rate limiting per IP (10 requests/minute)
-- Cache system prompts (don't rebuild on every request)
+- JSON payload (base64) instead of multipart for simplicity
+- Request timeout (30s)
+- In-memory generation tracking (clear old entries)
+- Rate limiting: 10 generations per image (cost control)
+- System prompts built dynamically (no caching needed for MVP)
 
 ### OpenAI API Optimization
 - Use `detail: "low"` for cost-sensitive scenarios (85 tokens vs 765+)
@@ -514,12 +373,16 @@ function renderMemeText(canvas, image, topText, bottomText) {
 
 ## Security Considerations
 
-### MVP (Minimal)
-- Validate image file types
-- Limit file size (10MB)
-- Sanitize user input (custom prompts)
-- Environment variables for API keys
-- CORS configuration (localhost only)
+### MVP Security
+- Validate image file types (JPG, PNG only)
+- Limit file size (10MB client-side + server-side)
+- Sanitize user input (custom prompts - prevent prompt injection)
+- Environment variables for API keys (never exposed to frontend)
+- CORS configuration:
+  - Development: `http://localhost:5173` (frontend)
+  - Production: Specific domain only
+- Rate limiting per image (10 generations)
+- OpenAI API budget limits ($50 hard cap, $40 alert)
 
 ### Future (Production)
 - Rate limiting (per user/IP)
@@ -533,31 +396,51 @@ function renderMemeText(canvas, image, topText, bottomText) {
 
 ## Deployment Architecture (Future)
 
-### MVP Deployment
-```
-Local Development:
-- Frontend: Vite dev server (localhost:5173)
-- Backend: Node.js server (localhost:3001)
-- No cloud deployment needed
-```
+## Deployment Architecture
 
-### Production Deployment (V2)
-```
-Frontend:
-- Host: Vercel or Netlify
-- CDN: Automatic
-- Environment: Browser
+### Development Environment
 
-Backend:
-- Host: Railway, Render, or Fly.io
-- Environment: Node.js container
-- Secrets: OpenAI API key in env vars
+**Frontend:** Vite dev server (localhost:5173)  
+**Backend:** Express server (localhost:3001)  
+**Testing:** Manual testing (Postman for API, browser for UI)  
 
-Infrastructure:
-- Frontend → API Gateway → Backend
-- Monitoring: Sentry for errors
-- Analytics: Plausible or Vercel Analytics
-```
+**Environment Variables:**
+
+Backend `.env`:
+- `OPENAI_API_KEY` - From OpenAI platform
+- `PORT` - Default 3001
+- `NODE_ENV` - development/production
+
+Frontend `.env`:
+- `VITE_API_URL` - Backend URL (http://localhost:3001)
+
+### Production Deployment (Phase 5)
+
+**Frontend (Vercel):**
+- Build command: `npm run build`
+- Output directory: `dist`
+- Environment: `VITE_API_URL` points to production backend
+- CDN: Automatic via Vercel Edge Network
+
+**Backend (Render or Railway):**
+- Start command: `node src/server.js`
+- Environment: `OPENAI_API_KEY`, `PORT`, `NODE_ENV=production`
+- Health check: `GET /api/health`
+- Auto-scaling: Platform-provided
+
+**Monitoring:**
+- Analytics: Vercel Analytics
+- Logs: Platform console logs
+- Costs: OpenAI dashboard (daily checks)
+- Uptime: Platform monitoring
+
+**Deployment Checklist:**
+- Frontend build tested locally
+- Production environment variables configured
+- CORS set for production domain
+- OpenAI budget limits active ($40 alert, $50 stop)
+- Health check endpoint verified
+- End-to-end production test passed
 
 ---
 
@@ -568,42 +451,49 @@ meme-generator/
 ├── frontend/
 │   ├── src/
 │   │   ├── components/
-│   │   │   ├── UploadZone.jsx
+│   │   │   ├── Upload.jsx
 │   │   │   ├── ContextControls.jsx
 │   │   │   ├── CaptionOptions.jsx
 │   │   │   ├── MemePreview.jsx
 │   │   │   └── DownloadButton.jsx
 │   │   ├── utils/
-│   │   │   ├── canvas.js (text rendering)
-│   │   │   ├── api.js (backend calls)
-│   │   │   └── validation.js
+│   │   │   ├── canvas.js (text rendering helpers)
+│   │   │   ├── api.js (backend API calls)
+│   │   │   └── validation.js (client-side validation)
 │   │   ├── App.jsx
 │   │   └── main.jsx
 │   ├── package.json
-│   └── vite.config.js
+│   ├── vite.config.js
+│   └── .env.example
 │
 ├── backend/
 │   ├── src/
 │   │   ├── routes/
 │   │   │   └── caption.js
 │   │   ├── services/
-│   │   │   ├── openai.js
-│   │   │   └── prompt.js
+│   │   │   └── openai.js (OpenAI SDK wrapper)
 │   │   ├── middleware/
-│   │   │   ├── upload.js (multer)
 │   │   │   └── validation.js
 │   │   └── server.js
 │   ├── package.json
 │   └── .env.example
 │
+├── ai/
+│   ├── guides/ (technical reference docs)
+│   ├── roadmaps/ (implementation plans)
+│   └── changelog.md
+│
 ├── aiDocs/
 │   ├── architecture.md (this file)
 │   ├── context.md
 │   ├── prd.md
-│   └── mvp.md
+│   ├── mvp.md
+│   └── market-research.md
 │
 └── README.md
 ```
+
+**Note:** Monorepo-lite structure - both frontend and backend in single repo for MVP simplicity.
 
 ---
 
@@ -615,52 +505,143 @@ meme-generator/
 - Large ecosystem
 - Easy Canvas integration
 
+### Why Vite?
+- Extremely fast dev server
+- Modern ESM-based build
+- No configuration needed
+- Better DX than CRA
+
 ### Why Express.js?
 - Lightweight and minimal
 - Easy OpenAI SDK integration
-- Good middleware ecosystem (multer, cors)
+- Good middleware ecosystem (cors)
 - No over-engineering for MVP
+- **Note:** Multer removed - using JSON with base64 instead of multipart uploads for simplicity
 
 ### Why Canvas (not Sharp on backend)?
 - **Simpler architecture:** No image round-trip to backend for rendering
 - **Faster UX:** Real-time preview updates
 - **Lower server costs:** Client-side processing
 - **Good enough quality:** Canvas text rendering is sufficient for memes
+- **Immediate feedback:** Users see text overlay as they select captions
 
 ### Why gpt-4o?
 - **Vision-capable:** Can analyze uploaded images
 - **Fast:** ~5-10s response time
 - **Cost-effective:** $0.003 per generation
 - **JSON mode:** Structured output without parsing hacks
+- **Current standard:** Replaces deprecated gpt-4-vision-preview
 
 ---
 
-## Future Enhancements (Post-MVP)
+## Implementation Phases
+
+This architecture is implemented across 6 phases (6 weeks total). See `ai/roadmaps/2026-02-16-implementation-roadmap.md` for details.
+
+**Phase 0 (Week 1):** Foundation
+- Project setup (Vite + Express)
+- OpenAI API integration
+- Test caption generation
+
+**Phase 1 (Weeks 2-3):** Core Flow
+- Upload UI with validation
+- Canvas text rendering
+- Caption selection and download
+- 10-generation limit enforcement
+
+**Phase 2 (Week 3-4):** Context Controls
+- 4 preset tone buttons
+- Custom prompt input
+- Dynamic prompt generation
+
+**Phase 3 (Week 4-5):** Polish & Testing
+- Error handling and messages
+- Analytics (Vercel Analytics)
+- Cost monitoring
+- Production deployment prep
+
+**Phase 4 (Week 5-6):** Beta Testing
+- 20-30 Gen Z users (18-24)
+- Survey feedback collection
+- Metrics validation
+
+**Phase 5 (Week 6):** Public Launch
+- Deploy to production
+- Product Hunt launch
+- Monitor metrics
+
+---
+
+## Post-MVP Enhancements (V2+)
 
 ### Technical Improvements
-- [ ] Sharp on backend for higher-quality rendering
+- [ ] Sharp on backend for optional high-quality rendering
 - [ ] WebSocket for real-time generation updates
 - [ ] Redis caching for repeated image analyses
-- [ ] Progressive Web App (PWA) for offline support
+- [ ] Progressive Web App (PWA) features
 - [ ] Video/GIF meme support (FFmpeg integration)
+- [ ] Mobile app (React Native)
 
 ### Feature Additions
 - [ ] User accounts & saved memes (PostgreSQL)
 - [ ] Social sharing integrations (Twitter, Instagram APIs)
 - [ ] Meme templates library
 - [ ] Batch processing (multiple images)
-- [ ] A/B testing for caption quality
+- [ ] Additional preset tones (Gen Z Slang, Work Humor)
+- [ ] Caption rating/feedback system
+- [ ] Community gallery
+
+---
+
+## Key Architecture Decisions
+
+### Decision Log
+
+**2026-02-16 - Initial Architecture:**
+- ✅ Canvas rendering on frontend (not Sharp on backend)
+- ✅ gpt-4o model (not deprecated gpt-4-vision-preview)
+- ✅ In-memory storage only (no database)
+- ✅ React + Vite frontend, Express backend
+- ✅ 3 caption options per generation (not single)
+- ✅ 10-generation limit per image (cost control)
+- ✅ JSON with base64 (not multipart uploads)
+- ✅ 4 preset tones + custom prompt support
+- ✅ Monorepo-lite structure (single repo, separate folders)
+
+### Anti-Patterns Avoided
+
+This is a **clean-slate project**. We explicitly avoid:
+- ❌ Over-engineering for theoretical scale
+- ❌ Unnecessary abstractions and middleware
+- ❌ "Just in case" features
+- ❌ Legacy compatibility layers
+- ❌ Premature optimization
+- ❌ Complex state management (Redux, etc.)
+- ❌ Automated testing for MVP (manual testing sufficient)
+
+**Philosophy:** Ship working software. Learn from users. Add complexity only when actually needed.
 
 ---
 
 ## References
 
-- Sharp API: https://sharp.pixelplumbing.com/
-- OpenAI Chat Completions: https://platform.openai.com/docs/api-reference/chat
+**Technical Documentation:**
+- OpenAI gpt-4o API: https://platform.openai.com/docs/api-reference/chat
 - Canvas API: https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API
-- React Docs: https://react.dev/
+- React: https://react.dev/
+- Vite: https://vitejs.dev/
+- Express: https://expressjs.com/
+
+**Project Documentation:**
+- Implementation Roadmap: `ai/roadmaps/2026-02-16-implementation-roadmap.md`
+- OpenAI Guide: `ai/guides/openai-vision-api-docs.md`
+- Canvas Guide: `ai/guides/canvas-api_context7.md`
+- PRD: `aiDocs/prd.md`
+- MVP Scope: `aiDocs/mvp.md`
 
 ---
 
-**Last Reviewed:** 2026-02-16  
-**Next Review:** After MVP implementation
+**Version:** 1.1  
+**Last Updated:** 2026-02-16  
+**Status:** Implementation Ready  
+**Next Review:** After Phase 1 completion
